@@ -1,0 +1,230 @@
+---
+title: "A2snp_H.lataniae_tolerance_Association"
+author: "Casey_Flay"
+date: "10/03/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(knitr)
+library(data.table)
+library(tidyverse)
+```
+
+```{r kruskal.test for association of SNPs from the A2 population with a tolerant father}
+## change parent to filter the heterozygotes on line 7.
+A2all_long <- fread("KWT_12E_run1_PS1.csv")
+A2all_long <- setnames(A2all_long,  c(names(A2all_long)), c(str_replace_all(names(A2all_long), ":", "_") ))
+A2all_long <- setnames(A2all_long, c(names(A2all_long)), c(str_replace_all(names(A2all_long), "-", "_") ))
+A2all_long_nuc <- A2all_long #keep a nucleotide version for checking
+
+A2all_long[A2all_long == "A"] <- "1"; A2all_long[A2all_long == "C"] <- "2"; A2all_long[A2all_long == "T"] <- "3"; A2all_long[A2all_long == "G"] <- "4"; A2all_long[A2all_long == "N"] <- "5"; A2all_long[A2all_long == "K"] <- "6"; A2all_long[A2all_long == "R"] <- "7"; A2all_long[A2all_long == "Y"] <- "8"; A2all_long[A2all_long == "W"] <- "9"; A2all_long[A2all_long == "M"] <- "10"; A2all_long[A2all_long == "S"] <- "11"; A2all_long[A2all_long == "Sus"] <- "21"; A2all_long[A2all_long == "Tol"] <- "20" #recode to numeric for data checking and heterozygous father filter
+
+A2all_long <- suppressWarnings(A2all_long[, lapply(.SD, as.numeric), by=plant]) #change column data class to numeric for numeric filter
+
+A2all_long <- A2all_long[T.16_01_01A_Dad2 >= 6] #only include snps which have a het dad at that site (dad is tolerant)
+
+A2all_wide <- as.data.table(t(A2all_long), keep.rownames=TRUE) #transpose table with "t"
+A2all_wide     <- setnames(A2all_wide, as.character(A2all_wide[1]))# needed as character for KWT.
+t<- A2all_wide[, "mode" := 1:.N, by=phenotype]
+A2all_wide_andparents<- A2all_wide[, by=phenotype]
+A2all_wide     <- A2all_wide[4:.N]# take out parents and column names
+
+y <- lapply(A2all_wide[1:.N], function(x){
+kruskal.test(x, g=(A2all_wide$phenotype))
+})
+
+y <- as.data.table(y)
+y <- y[3]
+y <- melt.data.table(y, id.vars = 1)
+y <- y[, plant := NULL]
+z <- y[value<0.001] #remove those with a high p value
+Kruskal_p.value <- as.numeric(z$value)
+snp_candidate <- select(A2all_wide, z$variable)
+snp_candidate_sites <- names(snp_candidate)
+
+significant_SNP_check <- A2all_long_nuc[plant %in% snp_candidate_sites, ]
+significant_SNP_male  <- cbind(significant_SNP_check, z$value)
+
+qplot(z$variable, Kruskal_p.value)#, aes(x="SNPposition", y="Kruskal.test_p-value") 
+```
+t<- A2all_long[, .SD[which.max(mpg)], by = cyl]
+#t <- table(as.character(A2all_long[2]))
+#t <- names(which.max(table(as.numeric((A2all_long[2])))))
+t <- A2all_long[T.16_01_01A_Dad2_MRG_5_40 == names(which.max(table(as.numeric((A2all_long[1])))))] 
+
+t <- A2all_long[, "new" := mode(A2all_long[1:nrow(A2all_long)])] 
+
+getMax <- function(x, n) {
+  suppressWarnings(
+    i <- x %>% as.numeric() %>% which.max()
+  )
+  n[i]
+}
+long_names <- names(A2all_long)
+A <- A2all_long[,altfromparent := getMax(.SD, long_names),.SDcols=colnames(A2all_long), by=1:nrow(A2all_long)]
+B<- A[altfromparent=="T.16_01_01A_Dad2_MRG_5_40"]
+
+```{r kruskal.test for association of SNPs from a population with a susceptible mother to check if anything is coming from mum}
+## change parent to filter the heterozygotes on line 7.
+A2all_long <- fread("KWT_12E_run1_PS1.csv")
+A2all_long <- setnames(A2all_long, c(names(A2all_long)), c(str_replace_all(names(A2all_long), ":", "_") ))
+A2all_long <- setnames(A2all_long, c(names(A2all_long)), c(str_replace_all(names(A2all_long), "-", "_") ))
+A2all_long_nuc <- A2all_long #keep a nucleotide version for checking
+
+A2all_long[A2all_long == "A"] <- "1"; A2all_long[A2all_long == "C"] <- "2"; A2all_long[A2all_long == "T"] <- "3"; A2all_long[A2all_long == "G"] <- "4"; A2all_long[A2all_long == "N"] <- "5"; A2all_long[A2all_long == "K"] <- "6"; A2all_long[A2all_long == "R"] <- "7"; A2all_long[A2all_long == "Y"] <- "8"; A2all_long[A2all_long == "W"] <- "9"; A2all_long[A2all_long == "M"] <- "10"; A2all_long[A2all_long == "S"] <- "11"; A2all_long[A2all_long == "Sus"] <- "21"; A2all_long[A2all_long == "Tol"] <- "20" #recode to numeric for data checking and heterozygous father filter
+A2all_long <- suppressWarnings(A2all_long[, lapply(.SD, as.numeric), by=plant]) #change column data class to numeric for numeric filter
+
+A2all_long <- A2all_long[CK51_06_MumA >= 6] #only include snps which have a het dad at that site (dad is tolerant)
+
+A2all_wide <- as.data.table(t(A2all_long), keep.rownames=TRUE) #transpose table with "t"
+A2all_wide     <- setnames(A2all_wide, as.character(A2all_wide[1]))# needed as character for KWT.
+t<- A2all_wide[, "mode" := 1:.N, by=phenotype]
+A2all_wide_andparents<- A2all_wide[, by=phenotype]
+A2all_wide     <- A2all_wide[4:.N]# take out parents and column names
+
+y <- lapply(A2all_wide[1:.N], function(x){
+kruskal.test(x, g=(A2all_wide$phenotype))
+})
+
+y <- as.data.table(y)
+y <- y[3]
+y <- melt.data.table(y, id.vars = 1)
+y <- y[, plant := NULL]
+z <- y[value<0.001] #remove those with a high p value
+Kruskal_p.value <- as.numeric(z$value)
+snp_candidate <- select(A2all_wide, z$variable)
+snp_candidate_sites <- names(snp_candidate)
+
+significant_SNP_check  <- A2all_long_nuc[plant %in% snp_candidate_sites, ]
+A2all_long_phenotype <- A2all_long_nuc[1]
+significant_SNP_female <- cbind(significant_SNP_check, z$value)
+
+qplot(z$variable, Kruskal_p.value)#, aes(x="SNPposition", y="Kruskal.test_p-value") 
+```
+
+```{r kruskal.test for association of SNPs from a Hort16A x russell population with a tolerant mother}
+## change parent to filter the heterozygotes on line 7.
+A2all_long <- fread("bwa_filt_incFM0.25_291020_forR_KWT.csv")
+A2all_long <- setnames(A2all_long, c(names(A2all_long)), c(str_replace_all(names(A2all_long), ":", "_") ))
+A2all_long <- setnames(A2all_long, c(names(A2all_long)), c(str_replace_all(names(A2all_long), "-", "_") ))
+A2all_long_nuc <- A2all_long #keep a nucleotide version for checking
+
+A2all_long[A2all_long == "A"] <- 1; A2all_long[A2all_long == "C"] <- 2; A2all_long[A2all_long == "T"] <- 3; A2all_long[A2all_long == "G"] <- 4; A2all_long[A2all_long == "N"] <- 5; A2all_long[A2all_long == "K"] <- 6; A2all_long[A2all_long == "R"] <- 7; A2all_long[A2all_long == "Y"] <- 8; A2all_long[A2all_long == "W"] <- 9; A2all_long[A2all_long == "M"] <- 10; A2all_long[A2all_long == "S"] <- 11; A2all_long[A2all_long == "Sus"] <- 21; A2all_long[A2all_long == "Tol"] <- 20 #recode to numeric for data checking and heterozygous father filter
+
+A2all_long <- suppressWarnings(A2all_long[, lapply(.SD, as.numeric), by=plant]) #change column data class to numeric for numeric filter to include phenotype
+
+A2all_long <- A2all_long[Hort16A1 >= 6] ##change for your parent name in A2all_long #only include snps which have a het dad at that site (dad is tolerant)
+
+A2all_wide <- as.data.table(t(A2all_long), keep.rownames=TRUE) #transpose table with "t"
+A2all_wide <- setnames(A2all_wide, as.character(A2all_wide[1]))# needed as character for KWT.
+
+#A2all_wide_andparents<- A2all_wide[, by=phenotype]
+A2all_wide     <- A2all_wide[4:.N]# take out parents and column names
+
+y <- lapply(A2all_wide[1:.N], function(x){
+kruskal.test(x, g=(A2all_wide$phenotype))
+})
+
+y <- as.data.table(y)
+y <- y[3]
+y <- melt.data.table(y, id.vars = 1)
+y <- y[, plant := NULL]
+fwrite(y, file="allsnpKWT.csv", sep=",")
+z <- y[value<0.05] #remove those with a high p value
+Kruskal_p.value <- as.numeric(z$value)
+snp_candidate <- select(A2all_wide, z$variable)
+snp_candidate_sites <- names(snp_candidate)
+
+significant_SNP_check <- A2all_long_nuc[plant %in% snp_candidate_sites, ]
+significant_SNP_female  <- cbind(significant_SNP_check, z$value)
+fwrite(significant_SNP_female, file="Hort16AxRu_SNPsP.001.csv", sep=",")
+
+qplot(z$variable, Kruskal_p.value)#, aes(x="SNPposition", y="Kruskal.test_p-value") 
+```
+
+```{r kruskal.test for association of SNPs from the hort16A x russell population with a susceptible father}
+## change parent to filter the heterozygotes on line 7.
+A2all_long <- fread("bwa_filt_incFM0.25_291020_forR_KWT.csv")
+A2all_long <- setnames(A2all_long, c(names(A2all_long)), c(str_replace_all(names(A2all_long), ":", "_") ))
+A2all_long <- setnames(A2all_long, c(names(A2all_long)), c(str_replace_all(names(A2all_long), "-", "_") ))
+A2all_long_nuc <- A2all_long #keep a nucleotide version for checking
+
+A2all_long[A2all_long == "A"] <- "1"; A2all_long[A2all_long == "C"] <- "2"; A2all_long[A2all_long == "T"] <- "3"; A2all_long[A2all_long == "G"] <- "4"; A2all_long[A2all_long == "N"] <- "5"; A2all_long[A2all_long == "K"] <- "6"; A2all_long[A2all_long == "R"] <- "7"; A2all_long[A2all_long == "Y"] <- "8"; A2all_long[A2all_long == "W"] <- "9"; A2all_long[A2all_long == "M"] <- "10"; A2all_long[A2all_long == "S"] <- "11"; A2all_long[A2all_long == "Sus"] <- "21"; A2all_long[A2all_long == "Tol"] <- "20" #recode to numeric for data checking and heterozygous father filter
+A2all_long <- suppressWarnings(A2all_long[, lapply(.SD, as.numeric), by=plant]) #change column data class to numeric for numeric filter
+
+A2all_long <- A2all_long[Russell1 >= 6] #only include snps which have a het dad at that site (dad is tolerant)
+
+A2all_wide <- as.data.table(t(A2all_long), keep.rownames=TRUE) #transpose table with "t"
+A2all_wide     <- setnames(A2all_wide, as.character(A2all_wide[1]))# needed as character for KWT.
+
+A2all_wide_andparents<- A2all_wide[, by=phenotype]
+A2all_wide     <- A2all_wide[4:.N]# take out parents and column names
+
+y <- lapply(A2all_wide[1:.N], function(x){
+kruskal.test(x, g=(A2all_wide$phenotype))
+})
+
+y <- as.data.table(y)
+y <- y[3]
+y <- melt.data.table(y, id.vars = 1)
+y <- y[, plant := NULL]
+fwrite(y, file="allsnpKWT.csv", sep=",")
+z <- y[value<0.05] #remove those with a high p value
+Kruskal_p.value <- as.numeric(z$value)
+snp_candidate <- select(A2all_wide, z$variable)
+snp_candidate_sites <- names(snp_candidate)
+
+significant_SNP_check <- A2all_long_nuc[plant %in% snp_candidate_sites, ]
+significant_SNP_male  <- cbind(significant_SNP_check, z$value)
+fwrite(significant_SNP_male, file="Hort16AxRu_SNPs.csv", sep=",", append = TRUE)
+qplot(z$variable, Kruskal_p.value)#, aes(x="SNPposition", y="Kruskal.test_p-value") 
+```
+```{r kruskal.test for association of SNPs from the hort16A x russell population with homparents}
+## change parent to filter the heterozygotes on line 7.
+A2all_long <- fread("bwa_filt_incFM0.25_291020_forR_KWT.csv")
+A2all_long <- setnames(A2all_long, c(names(A2all_long)), c(str_replace_all(names(A2all_long), ":", "_") ))
+A2all_long <- setnames(A2all_long, c(names(A2all_long)), c(str_replace_all(names(A2all_long), "-", "_") ))
+A2all_long_nuc <- A2all_long #keep a nucleotide version for checking
+
+A2all_long[A2all_long == "A"] <- "1"; A2all_long[A2all_long == "C"] <- "2"; A2all_long[A2all_long == "T"] <- "3"; A2all_long[A2all_long == "G"] <- "4"; A2all_long[A2all_long == "N"] <- "20"; A2all_long[A2all_long == "K"] <- "20"; A2all_long[A2all_long == "R"] <- "20"; A2all_long[A2all_long == "Y"] <- "8"; A2all_long[A2all_long == "W"] <- "9"; A2all_long[A2all_long == "M"] <- "10"; A2all_long[A2all_long == "S"] <- "11"; A2all_long[A2all_long == "Sus"] <- "5"; A2all_long[A2all_long == "Tol"] <- "6" #recode to numeric for data checking and heterozygous father filter
+A2all_long <- suppressWarnings(A2all_long[, lapply(.SD, as.numeric), by=plant]) #change column data class to numeric for numeric filter
+
+A2all_long <- A2all_long[Russell1 <= 6 & Hort16A1 <= 6] #only include snps which have a het dad at that site (dad is tolerant)
+
+A2all_wide <- as.data.table(t(A2all_long), keep.rownames=TRUE) #transpose table with "t"
+A2all_wide     <- setnames(A2all_wide, as.character(A2all_wide[1]))# needed as character for KWT.
+
+A2all_wide_andparents<- A2all_wide[, by=phenotype]
+A2all_wide     <- A2all_wide[4:.N]# take out parents and column names
+
+y <- lapply(A2all_wide[1:.N], function(x){
+kruskal.test(x, g=(A2all_wide$phenotype))
+})
+
+y <- as.data.table(y)
+y <- y[3]
+y <- melt.data.table(y, id.vars = 1)
+y <- y[, plant := NULL]
+fwrite(y, file="allsnpKWThom.csv", sep=",")
+z <- y[value<0.05] #remove those with a high p value
+Kruskal_p.value <- as.numeric(z$value)
+snp_candidate <- select(A2all_wide, z$variable)
+snp_candidate_sites <- names(snp_candidate)
+
+significant_SNP_check <- A2all_long_nuc[plant %in% snp_candidate_sites, ]
+significant_SNP_male  <- cbind(significant_SNP_check, z$value)
+fwrite(significant_SNP_male, file="Hort16AxRu_SNPs.csv", sep=",", append = TRUE)
+qplot(z$variable, Kruskal_p.value)#, aes(x="SNPposition", y="Kruskal.test_p-value") 
+```
+
+```{r kruskal.test for association of SNPs from the A2 population KEIIII genotyping}
+A1 <- fread("A1popKWT.csv")
+A2 <- fread("A2popKWT.csv")
+A1r <- kruskal.test(A1$KWTgenotype1234, g=(A1$KWTphenotype))
+print(A1r)
+A2r <- kruskal.test(A2$KWTgenotype1234, g=(A2$KWTphenotype))
+print(A2r)
+```
+
