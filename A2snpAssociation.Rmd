@@ -27,7 +27,6 @@ A2all_long <- A2all_long[T.16_01_01A_Dad2 >= 6] #only include snps which have a 
 
 A2all_wide <- as.data.table(t(A2all_long), keep.rownames=TRUE) #transpose table with "t"
 A2all_wide     <- setnames(A2all_wide, as.character(A2all_wide[1]))# needed as character for KWT.
-t<- A2all_wide[, "mode" := 1:.N, by=phenotype]
 A2all_wide_andparents<- A2all_wide[, by=phenotype]
 A2all_wide     <- A2all_wide[4:.N]# take out parents and column names
 
