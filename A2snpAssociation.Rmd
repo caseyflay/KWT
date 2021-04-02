@@ -3,9 +3,9 @@ title: "A2snp_H.lataniae_tolerance_Association"
 author: "Casey_Flay"
 date: "10/03/2021"
 output:
-  pdf_document: default
-  html_document: default
   word_document: default
+  html_document: default
+  pdf_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -57,12 +57,4 @@ KWT001plot <- qplot(KWTtest001$variable, Kruskal_p, xlab="SNPposition", ylab ="K
 KWT001plot + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
 ```
 
-```{r kruskal.test for association of genotypes from the A1 and A2 population with H.lataniae tolerance phenotype}
-A1 <- fread("A1popKWT.csv")
-A1r <- kruskal.test(A1$KWTgenotype1234, g=(A1$KWTphenotype))
-print(A1r)
 
-A2 <- fread("A2popKWT.csv")
-A2r <- kruskal.test(A2$KWTgenotype1234, g=(A2$KWTphenotype))
-print(A2r)
-```

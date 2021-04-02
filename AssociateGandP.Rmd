@@ -1,0 +1,25 @@
+---
+title: "Association of genotype with phenotype with Kurskal-Wallis test"
+author: "Casey_Flay"
+date: "02/04/2021"
+output:
+  word_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(knitr)
+library(data.table)
+library(tidyverse)
+```
+## Kruskal-Wallis test for association of genotypes from the A1 and A2 families with *H. lataniae* tolerance phenotype
+```{r}
+A1 <- fread("A1popKWT.csv")
+A1r <- kruskal.test(A1$KWTgenotype1234, g=(A1$KWTphenotype))
+print(A1r)
+
+A2 <- fread("A2popKWT.csv")
+A2r <- kruskal.test(A2$KWTgenotype1234, g=(A2$KWTphenotype))
+print(A2r)
+```
