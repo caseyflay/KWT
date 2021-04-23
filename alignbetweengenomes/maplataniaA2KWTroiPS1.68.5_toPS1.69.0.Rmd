@@ -1,0 +1,59 @@
+---
+title: "map latania A2 KWT result region of interest from PS1.68.5 to PS1.69.0"
+author: "Casey Flay"
+date: "16/04/2021"
+output: Rmarkdown.Rmd
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, comment = "#>")
+library(RLinuxModules)
+library(data.table)
+library(glue)
+library(here)
+module("load samtools/1.9 openlava asub htslib/1.9 ncbi-blast/2.6.0")
+```
+
+```{bash}
+samtools faidx "/output/genomic/plant/Actinidia/chinensis/CK51F3_01/Genome/Assembly/PS1/1.68.5/AllChromosomes/PS1.1.68.5.fasta" -r "regionsfile.txt" -o "regions.fasta"
+```
+
+
+```{r}
+file.symlink("/workspace/ComparativeDataSources/Actinidia/chinensis/Red5_PS1_1.69.0/GCA_003024255.1_Red5_PS1_1.69.0/GCA_003024255.1_Red5_PS1_1.69.0_genomic.fna", "/powerplant/workspace/hrtcdf/github/A2snps/alignbetweengenomes/reflink")
+file.symlink("/workspace/ComparativeDataSources/Actinidia/chinensis/Red5_PS1_1.69.0/GCA_003024255.1_Red5_PS1_1.69.0/GCA_003024255.1_Red5_PS1_1.69.0_genomic.fna.fai", "/powerplant/workspace/hrtcdf/github/A2snps/alignbetweengenomes/reflink")
+```
+```{bash}
+makeblastdb -h
+```
+```{bash blast database GCA_003024255.1_Red5_PS1_1.69.0}
+#module "load ncbi-blast/2.6.0"
+Dir="blast"
+ref="/powerplant/workspace/hrtcdf/github/A2snps/alignbetweengenomes/reflink/GCA_003024255.1_Red5_PS1_1.69.0_genomic.fna"
+
+cd "/powerplant/workspace/hrtcdf/github/A2snps/alignbetweengenomes"
+if  [ ! -d  "logDir" ]; then mkdir "logDir" ; fi
+logDir="/powerplant/workspace/hrtcdf/github/A2snps/alignbetweengenomes/logDir"
+
+bsub -n 8 -o $logDir/$Dir.log -e $logDir/$Dir.err "makeblastdb -in $ref -input_type fasta \
+-dbtype nucl -title Red5_PS1_1.69.0"
+```
+
+```{bash blast KWT hits+200bp against PS1.69}
+#module "load ncbi-blast/2.6.0"
+Dir="blastout"
+ref="/powerplant/workspace/hrtcdf/github/A2snps/alignbetweengenomes/reflink/GCA_003024255.1_Red5_PS1_1.69.0_genomic.fna"
+
+cd "/powerplant/workspace/hrtcdf/github/A2snps/alignbetweengenomes"
+if  [ ! -d  "logDir" ]; then mkdir "logDir" ; fi
+logDir="/powerplant/workspace/hrtcdf/github/A2snps/alignbetweengenomes/logDir"
+
+bsub -n 8 -o $logDir/$Dir.log -e $logDir/$Dir.err "blastn -db $ref -query regions.fasta -out latKWTregionsRed5blast.out -evalue 1e-5 -outfmt 6"
+```
+```{r pull relavant bits as data. table}
+x <- fread("latKWTregionsRed5blast.out")
+y <- x[V12>=355, .(V1, V2, V9, V10)]
+```
+
+
+
