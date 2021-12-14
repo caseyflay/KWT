@@ -13,7 +13,11 @@ knitr::opts_chunk$set(echo = TRUE)
 library(knitr)
 library(data.table)
 library(tidyverse)
-module("load samtools/1.9 htslib/1.9 ncbi-blast/2.6.0")
+library(kableExtra)
+library(magick)
+library(R.utils)
+module("load samtools/1.9 htslib/1.9 ncbi-blast/2.6.0") # 
+options(scipen = 999, digits=10)#round to 10 digits.
 ```
 
 ##recode data and run kruskal.test for association of SNPs from A2 family with H.lataniae tolerance phenotype with SNPs filtered on heterozygous alleles in the tolerant Male parent. Significant sites +200bp were cut from the aligned reference PS1.68.5 and blast against PS1.69.0 to have a consistant genome alignments between datasets.
@@ -40,46 +44,59 @@ KWTtest    <- lapply(A2all_wide[1:.N], function(x){
 kruskal.test(x, g=(A2all_wide$phenotype))
 })
 
-KWTtest    <- as.data.table(KWTtest)
-KWTtest    <- KWTtest[3]
-KWTtest    <- melt.data.table(KWTtest, id.vars = 1)
-KWTtestall <- KWTtest[, plant := NULL]
-KWTtest0.01 <- KWTtestall[value<0.01] #remove those with a high p value
-KWTtest0.001 <- KWTtest0.01[value<0.001] #remove those with a high p value
-Kruskal_p  <- as.numeric(KWTtest0.001$value)
-snpat001   <- select(A2all_wide, KWTtest0.001$variable)
-snpat001   <- names(snpat001)
+KWTtest     <- as.data.table(KWTtest)
+KWTtest     <- KWTtest[3]
+KWTtest     <- melt.data.table(KWTtest, id.vars = 1)
+KWTtest     <- KWTtest[, "fdr" := (p.adjust(KWTtest[,value], method = "fdr", n = length(KWTtest[,value])))] #adjusts for multiple comparisons https://stat.ethz.ch/R-manual/R-devel/library/stats/html/p.adjust.html
+KWTtestall   <- KWTtest[, plant := NULL]
+KWTtest0.001 <- KWTtestall[value<0.001] #remove those with a high p fdr
+KWTtest0.001 <- KWTtest0.001[, `:=` (value=as.numeric(value), fdr=as.numeric(fdr))]
+snpat001     <- A2all_wide[, KWTtest0.001$variable, with=FALSE]
 
-SNP_check  <- A2all_long_nuc[plant %in% snpat001, ]
-goodSNPs   <- cbind(SNP_check, KWTtest0.001$value)
+SNP_check    <- A2all_long_nuc[plant %in% names(snpat001), ]
+goodSNPs     <- cbind(SNP_check, KWTtest0.001$value, KWTtest0.001$fdr)
+goodSNPs     <- setnames(goodSNPs, c("V2","V3"), c("KWTtest0.001","fdr"))
 
-KWT001plot <- qplot(KWTtest0.001$variable, Kruskal_p, xlab="SNPposition", ylab ="Kruskal.test_p-value")
-KWT001plot + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))# these positions are for Red5_PS1.68.5 see below for PS 1.69.0
+KWT001plot <- qplot(KWTtest0.001$variable, KWTtest0.001, xlab="SNPposition", ylab ="Kruskal.test_p-value")+
+  theme_classic()+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+# these positions are for Red5_PS1.68.5 see below for PS 1.69.0
+  theme(plot.background = element_rect(size=0.1)) #squish plot a bit
+#KWT001plot
 ```
 
 ```{r get a file ready for blast alignment}
-s<- as.data.table(str_split_fixed(KWTtest0.001$variable, pattern = "_", n=2))
-t<-cbind(KWTtest0.001,s)
+s<- as.data.table(str_split_fixed(goodSNPs$plant, pattern = "_", n=2))
+t<- cbind(KWTtest0.001,s)
 t<- t[V1!="phenotype"]
 t<- t[, V2 := as.numeric(V2)]
-t<- t[, "right" := V2+200]
+t<- t[, "right" := V2+100]
 t<- t[, V3 := str_replace_all(V1, "S", "CHR")]
 t<- t[, V3 := paste0(V3,":", V2, "-", right)]
 fwrite(t[, .(V3)], file="SNPposFromA2KWT.txt", col.names=FALSE)
 #t<- t[V1=="S10"]
 ```
 
-```{bash regions from A2 families 0.001, Eval:FALSE}
+##regions from A2 families 0.001
+```{bash, Eval:FALSE}
 samtools faidx "/output/genomic/plant/Actinidia/chinensis/CK51F3_01/Genome/Assembly/PS1/1.68.5/AllChromosomes/PS1.1.68.5.fasta" -r "SNPposFromA2KWT.txt" -o "regionsSNPposFromA2KWT.fasta"
 ```
 
-```{r Eval:FALSE}
+```{r symlink, eval=FALSE}
+setwd("/powerplant/workspace/hrtcdf/github/A2snps/alignbetweengenomes/reflink")
 file.symlink("/workspace/ComparativeDataSources/Actinidia/chinensis/Red5_PS1_1.69.0/GCA_003024255.1_Red5_PS1_1.69.0/GCA_003024255.1_Red5_PS1_1.69.0_genomic.fna", "/powerplant/workspace/hrtcdf/github/A2snps/alignbetweengenomes/reflink")
 file.symlink("/workspace/ComparativeDataSources/Actinidia/chinensis/Red5_PS1_1.69.0/GCA_003024255.1_Red5_PS1_1.69.0/GCA_003024255.1_Red5_PS1_1.69.0_genomic.fna.fai", "/powerplant/workspace/hrtcdf/github/A2snps/alignbetweengenomes/reflink")
+# file.symlink("/workspace/hrards/projects/hrtcdf/genome/fasta/Russell_V2a.fa.gz","/powerplant/workspace/hrtcdf/github/A2snps/alignbetweengenomes/reflink")
+# file.symlink("/workspace/hrards/projects/hrtcdf/genome/fasta/Russell_V2a.fa.gz.fai","/powerplant/workspace/hrtcdf/github/A2snps/alignbetweengenomes/reflink")
+
+#symlink is denying permission when directing to hrards for Russellv2a, trying copy of reference
+#file.copy("/workspace/hrards/projects/hrtcdf/genome/fasta/Russell_V2a.fa.gz","/powerplant/workspace/hrtcdf/github/A2snps/alignbetweengenomes/reflink")
+#gunzip("/powerplant/workspace/hrtcdf/github/A2snps/alignbetweengenomes/reflink/Russell_V2a.fa.gz", remove=FALSE)
+# file.copy("/workspace/hrards/projects/hrtcdf/genome/fasta/Russell_V2a.fa.gz.fai","/powerplant/workspace/hrtcdf/github/A2snps/alignbetweengenomes/reflink")
 ```
 
-```{bash make blast database for Red5_PS1_1.69.0, eval:FALSE}
-#module "load ncbi-blast/2.6.0"
+##make blast database for Red5_PS1_1.69.0
+```{bash, Eval:FALSE}
+module "load ncbi-blast/2.6.0"
 Dir="blast"
 ref="/powerplant/workspace/hrtcdf/github/A2snps/alignbetweengenomes/reflink/GCA_003024255.1_Red5_PS1_1.69.0_genomic.fna"
 
@@ -89,9 +106,9 @@ logDir="/powerplant/workspace/hrtcdf/github/A2snps/alignbetweengenomes/logDir"
 
 bsub -n 8 -o $logDir/$Dir.log -e $logDir/$Dir.err "makeblastdb -in $ref -input_type fasta -dbtype nucl -title Red5_PS1_1.69.0"
 ```
-
-```{bash blast A2family KWT hits+200bp against PS1.69, eval:FALSE}
-#module "load ncbi-blast/2.6.0"
+## blast A2family KWT hits+200bp against PS1.69.0
+```{bash, Eval:FALSE}
+module "load ncbi-blast/2.6.0"
 Dir="blastout"
 ref="/powerplant/workspace/hrtcdf/github/A2snps/alignbetweengenomes/reflink/GCA_003024255.1_Red5_PS1_1.69.0_genomic.fna"
 
@@ -99,53 +116,129 @@ cd "/powerplant/workspace/hrtcdf/github/A2snps"
 if  [ ! -d  "logDir" ]; then mkdir "logDir" ; fi
 logDir="/powerplant/workspace/hrtcdf/github/A2snps/logDir"
 
-bsub -n 8 -o $logDir/$Dir.log -e $logDir/$Dir.err "blastn -db $ref -query regionsSNPposFromA2KWT.fasta -out regionsSNPposFromA2KWT.out -evalue 1e-6 -outfmt 6"
+bsub -n 8 -o $logDir/$Dir.log -e $logDir/$Dir.err "blastn -db $ref -query regionsSNPposFromA2KWT.fasta -out regionsSNPposFromA2KWT.tsv -evalue 1e-6 -outfmt 6"
+```
+
+## make blast database for Russellv2a
+```{bash, Eval:FALSE}
+module "load ncbi-blast/2.6.0"
+Dir="blast"
+ref= "/powerplant/workspace/hrtcdf/github/A2snps/alignbetweengenomes/reflink/Russell_V2a.fa"
+
+cd "/powerplant/workspace/hrtcdf/github/A2snps/alignbetweengenomes"
+if  [ ! -d  "logDir" ]; then mkdir "logDir" ; fi
+logDir="/powerplant/workspace/hrtcdf/github/A2snps/alignbetweengenomes/logDir"
+
+bsub -n 8 -o $logDir/$Dir.log -e $logDir/$Dir.err "makeblastdb -in $ref -input_type fasta -dbtype nucl -title Russellv2a"
+```
+## bash blast A2family KWT hits+200bp against Russellv2a
+```{bash, Eval:FALSE}
+#module "load ncbi-blast/2.6.0"
+Dir="blastout"
+ref="/powerplant/workspace/hrtcdf/github/A2snps/alignbetweengenomes/reflink/Russell_V2a.fa.gz"
+
+cd "/powerplant/workspace/hrtcdf/github/A2snps"
+if  [ ! -d  "logDir" ]; then mkdir "logDir" ; fi
+logDir="/powerplant/workspace/hrtcdf/github/A2snps/logDir"
+
+bsub -n 8 -o $logDir/$Dir.log -e $logDir/$Dir.err "blastn -db $ref -query regionsSNPposFromA2KWT.fasta -out regionsSNPposFromA2KWT.tsv -evalue 1e-6 -outfmt 6"
 ```
 
 ```{r pull relavant bits as data.table and bind to original to check}
-x <- fread("regionsSNPposFromA2KWT.out")
-y <- x[V3==100, .(V1, V2, V9, V10)]
-z <- KWTtest0.001[variable!="phenotype"]
-y <- cbind(y, z)
+x <- fread("regionsSNPposFromA2KWT.tsv")
+y <- x[V3==100, .(V1, V2, V3, V9)] #just take the 100%matches
+#y <- x[, .(V1, V2, V3, V9)] #take all matches
+y <- setnames(y, c("V2","V3","V9"), c("chrNCBI","match","PS1.69.0"))
 s <- as.data.table(str_split_fixed(y$V1, pattern = ":", n=2))
-s <- setnames(s, c("V1","V2"), c("V11", "V12"))
-y <- cbind(y, s)
-s <- as.data.table(str_split_fixed(y$V12, pattern = "-", n=2))
-s <- setnames(s, c("V1","V2"), c("V13", "V14"))
-y <- cbind(y, s)
-y <- y[, V15 := str_replace_all(V11, "CHR", "S")
-     ][, "positionPS1.68.5" := paste0(V15,"_", V13)
-     ][, "positionPS1.69.0" := paste0(V11,"_", V9)
-     ][, "positionMb" := V9/1000000
-     ][,  positionMb := as.numeric(formatC(y$positionMb,digits=2,format="f"))
-     ][, "positionPS1.69.0mb" := paste0(V11,"_", positionMb)
-     ][, positionPS1.69.0mb := str_replace_all(positionPS1.69.0mb, "CHR", "Chr")
-     ][, value := as.numeric(value)
-     #][V11=="CHR10"
-     ][order(V11,V9)]
-sapply(y,class)
+s <- setnames(s, c("V1","V2"), c("CHR_PS1.68.5", "V12"))
+s1 <- as.data.table(str_split_fixed(s$V12, pattern = "-", n=2))
+s1 <- setnames(s1, c("V1","V2"), c("PS1.68.5", "V14"))
+y  <- cbind(y,s,s1)
+y  <- setkey(y, PS1.68.5)
+
+z  <- KWTtest0.001[variable!="phenotype",]
+z1 <- as.data.table(str_split_fixed(z$variable, pattern = "_", n=2))
+z1 <- setnames(z1, c("V1","V2"), c("CHR_PS1.69.0", "PS1.69.0"))
+z  <- cbind(z, z1)
+z  <- setkey(z, PS1.69.0)
+y  <- y[z]
+y  <- y[, `:=` (PS1.69.0=as.numeric(PS1.69.0),PS1.68.5=as.numeric(PS1.68.5))]
+y  <- y[, fdr := formatC(y$fdr,digits=4,format="f")
+      ][, value := as.numeric(value)]
+      #][order(V11,V9)]
+#y <- y[, "PS1.69.0Mb" := PS1.69.0/1000000][, "PS1.68.5Mb" := PS1.68.5/1000000 ][, positionPS1.69.0mb := str_replace_all(positionPS1.69.0mb, "CHR", "Chr")
+
+A2SNPs <- y[, .(CHR_PS1.69.0, PS1.68.5, PS1.69.0, fdr)]
+A2SNPs <- A2SNPs[, "plant" := paste(CHR_PS1.69.0, PS1.68.5, sep="_")]
+A2SNPs <- A2SNPs[, CHR_PS1.69.0 := str_replace(A2SNPs[,CHR_PS1.69.0], "S9", "chr9")
+               ][, CHR_PS1.69.0 := str_replace(A2SNPs[,CHR_PS1.69.0], "S10", "chr10")
+               ][, CHR_PS1.69.0 := str_replace(A2SNPs[,CHR_PS1.69.0], "S12", "chr12")]
+A2SNPs    <- setkey(A2SNPs, plant)
+goodSNPs1 <- setkey(goodSNPs,plant)
+goodSNPs1 <- goodSNPs[plant!="phenotype"|plant!="S10_10515007"][,fdr:=NULL]
+A2SNPs    <- cbind(goodSNPs1,A2SNPs)
+
+A2SNPs <- A2SNPs[,plant:=NULL][,"SNPs_segregating_on_parent" := "Male_6"]
+
+names_table  <- as.data.table(names(A2SNPs))
+names_table  <- setnames(names_table, c("V1"), c("names_original"))
+names(A2SNPs)
+names_table  <- names_table[, "namesnew" := c("Female_5_Susceptible_Parent", "Male_6_Tolerant_Parent",  "Tol_1_A2", "Tol_2_A2", "Tol_3_A2", "Tol_4_A2", "Tol_5_A2", "Tol_6_A2" ,"Tol_7_A2",   "Tol_8_A2", "Tol_9_A2",  "Sus_1_A2", "Sus_2_A2" , "Sus_3_A2",  "Sus_4_A2",  "Sus_5_A2", "Sus_6_A2", "Sus_7_A2",   "Sus_8_A2", "Sus_9_A2","KWTtest_0.001", "CHR_PS1.69.0", "PS1.68.5", "PS1.69.0", "fdr", "plant", "SNPs_segregating_on_parent")]
+A2SNPs <- setnames(A2SNPs, names_table[, names_original], names_table[, namesnew])
+
+#Reorder columns
+A2SNPs  <- A2SNPs[, .(SNPs_segregating_on_parent, PS1.68.5, PS1.69.0, Male_6_Tolerant_Parent, Tol_1_A2, Tol_2_A2, Tol_3_A2, Tol_4_A2, Tol_5_A2, Tol_6_A2 ,Tol_7_A2, Tol_8_A2, Tol_9_A2, Female_5_Susceptible_Parent,   Sus_1_A2, Sus_2_A2 , Sus_3_A2, Sus_4_A2, Sus_5_A2, Sus_6_A2, Sus_7_A2, Sus_8_A2, Sus_9_A2, KWTtest_0.001, CHR_PS1.69.0, fdr, plant)]
+
+#sapply(A2SNPs,class)
+fwrite(A2SNPs, "regionsSNPposFromA2KWT.csv", append=F)
 ```
 
-```{r}
-options(repr.plot.width = 1, repr.plot.height = 0.05)
-p <- y %>%
-   
-   ggplot(aes(x=positionPS1.69.0mb, y=y$value))+ 
-   geom_jitter(stat="identity", width = 0)+
-   labs(y= "Kruskal.test_p-value", x = "SNPposition on Chromosome 10")
-p <- p + theme(axis.text.x = element_text(angle = 90))
-#p <- p + scale_x_continuous(name="Mbp along chromosome 10", limits=c(0, 20))
-ggsave("A2kwt.png", plot = p)
+##the thesis doc doesn't require header or caption for figures.
+```{r for table A2rtGBS_kwt_regions.png}
+A2SNPs <-fread("regionsSNPposFromA2KWT.csv")
+kable(A2SNPs, col.names = c(colnames(A2SNPs))) %>%
+  kable_styling("striped", full_width = F, font_size = 12, latex_options="scale_down") %>%
+#    spec_angle(0, angle = -45) %>% doesn't work
+  column_spec (4:13, color = "green") %>%
+  column_spec (14:23, color = "red") %>%  
+  save_kable("A2rtGBS_kwt_regions.png")
+```
+
+```{r incomplete chunk as i wasn't sure what to do with phenotype in the table, eval=FALSE}
+A2SNPs_table <- fread("A2rtGBS_table.txt")
+A2SNPs_table <- A2SNPs_table[is.na(KWT_p0.001) | KWT_p0.001==0.0000373798]
+A2SNPs_table <- setnames(A2SNPs_table, c("Position"), c("PS1.69.0"))
+A2SNPs_table <- A2SNPs_table[, "PS1.69.0Mb" := PS1.69.0/1000000]
+A2SNPs_table <- setkey(A2SNPs_table, PS1.69.0Mb)
+A2SNPs       <- fread("regionsSNPposFromA2KWT.csv")
+A2SNPs       <- A2SNPs[, .(CHR_PS1.69.0, PS1.68.5Mb, PS1.69.0Mb, fdr)]
+A2SNPs       <- setkey(A2SNPs, PS1.69.0Mb)
+#A2SNPs_table <- cbind(A2SNPs_table, A2SNPs)
+```
+
+```{r for plot which is a bit sparse to be used, eval=FALSE}
+A2SNPs <-fread("regionsSNPposFromA2KWT.csv")
+
+A2SNPsp <- function(A) {
+    ggplot(A2SNPs, aes(x=positionMb, y=fdr, fill=Chromosome))+
+    ggtitle("Kruskal test for rtGBS SNPs over whole genome") +
+    theme_classic()+
+    theme(plot.title   = element_text(hjust = 0.5, vjust = 0.5, size=14))+
+    theme(axis.title.y = element_text(hjust = 0.5, vjust = 0.5, size=12))+
+    theme(axis.title.x = element_text(hjust = 0.5, vjust = 0, size=12))+
+    theme(axis.text.x  = element_text(angle = 0, vjust = 0.5, size=10))+
+    theme(axis.text.y  = element_text(vjust = 0, hjust= 0.5, size=10))+
+    theme(plot.margin = unit(c(0.5,0.5,6.5,0.5), "cm"))+ #margin height, right, bottom, left. sizr comes out well in the wash
+    theme(plot.background = element_rect(size=0.2))+ #squish plot a bit
+    scale_x_continuous(breaks=seq(0.02))+ #0 is the start, 14 end, units of 2.
+    scale_y_continuous(breaks=seq(0.02))+ #0 is the start, 14 end, units of 2.
+    #geom_point(shape = 21, alpha = 3/10, size= 4, position=position_jitterdodge(seed = 1, dodge.width = 1))+
+    #geom_point(shape = 21, alpha = 3/10, size= 4, position=position_jitter(width=-1, seed=1))+
+    geom_point(shape = 21, alpha = 3/10, size= 4, position=position_stack())+
+    labs(y= "Kruskal test p-value", x = "SNP position (Mb) on genome")
+}
+p <- A2SNPsp()
+ggsave("A2kwt_rtGBS_allchrs.png", plot = p)
 p
+#cant seem to keep it squished without crazy margins and croping after export which seems to work.
 ```
-```{r}
-p <- y %>%
-   ggplot( aes(x=positionMb, y=y$value))+ 
-   geom_point(stat="identity")+
-   labs(y= "Kruskal.test_p-value", x = "SNPposition on Chromosome 10")
-p <- p + scale_x_continuous(name="Mbp along chromosome 10", limits=c(0, 20))
-ggsave("A2kwt.png", plot = p)
-p
-```
-
-
